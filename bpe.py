@@ -1,3 +1,5 @@
+import dill
+
 class BPE():
     def __init__(self, vocab_size: int) -> None:
         self.vocab_size = vocab_size
@@ -8,7 +10,7 @@ class BPE():
     def fit(self, text: str) -> None:
         tokens = list(text)
         self.uniquietokens = sorted(set(tokens))
-        while len(self.uniquietokens) != self.vocab_size:
+        while len(self.uniquietokens) < self.vocab_size:
             pairs_freqs = {}
             for i in range(len(tokens) - 1):
                 pair = (tokens[i], tokens[i + 1])
@@ -31,7 +33,7 @@ class BPE():
             tokens = merged
             self.uniquietokens.append(new_token)
 
-        for idx in range(self.vocab_size):
+        for idx in range(len(self.uniquietokens)):
             self.id2token[idx] = self.uniquietokens[idx]
             self.token2id.update({self.uniquietokens[idx]: idx})
     
@@ -56,13 +58,28 @@ class BPE():
         return encoded_text
     
     def decode(self, token_ids: list[int]) -> str:
-        tokens = [self.id2token.get(elem) for elem in token_ids]
+        tokens = [self.id2token.get(elem, '') for elem in token_ids]
         return ''.join(tokens)
 
+    def save(self, filename):
+        with open(filename, 'wb') as f:
+            dill.dump(self, f)
+        print(f"Object saved in: {filename}")
+
+
+    @classmethod
+    def load(cls, filename):
+        with open(filename, 'rb') as f:
+            obj = dill.load(f)
+                
+        print(f"Object loaded from: {filename}")
+        return obj
 
 
 text = 'Из кузова в кузов шла перегрузка арбузов. В грозу в грязи от груза арбузов развалился кузов.'
-model = BPE(30)
-model.fit(text)
-encoded = model.encode(text)
-print(model.decode(encoded))
+
+bpe = BPE(vocab_size=30)
+bpe.fit(text)
+bpe.save('./data/bpe.dill')
+
+bpe = BPE.load('data/bpe.dill')
