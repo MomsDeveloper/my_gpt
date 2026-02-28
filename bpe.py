@@ -54,8 +54,15 @@ class BPE():
                 idx += 1
         encoded_text = [self.token2id.get(elem) for elem in tokenized_text]
         return encoded_text
+    
+    def decode(self, token_ids: list[int]) -> str:
+        tokens = [self.id2token.get(elem) for elem in token_ids]
+        return ''.join(tokens)
+
+
 
 text = 'Из кузова в кузов шла перегрузка арбузов. В грозу в грязи от груза арбузов развалился кузов.'
 model = BPE(30)
 model.fit(text)
-model.encode(text)
+encoded = model.encode(text)
+print(model.decode(encoded))
