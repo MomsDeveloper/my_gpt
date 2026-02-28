@@ -5,7 +5,7 @@ class BPE():
         self.token2id = {}
         self.uniquietokens = []
 
-    def fit(self, text: str):
+    def fit(self, text: str) -> None:
         tokens = list(text)
         self.uniquietokens = sorted(set(tokens))
         while len(self.uniquietokens) != self.vocab_size:
@@ -34,7 +34,28 @@ class BPE():
         for idx in range(self.vocab_size):
             self.id2token[idx] = self.uniquietokens[idx]
             self.token2id.update({self.uniquietokens[idx]: idx})
-        
+    
+    def encode(self, text:str) -> list:
+        split_text = list(text)
+        tokenized_text = []
+        idx = 0
+        while idx < len(split_text):
+            candidates = [t for t in self.uniquietokens if t[0] == split_text[idx]]
+            candidates = sorted(candidates, key=lambda x: len(x), reverse=True)
+            matched = False
+            for elem in candidates:
+                if text[idx: idx + len(elem)] == elem:
+                    tokenized_text.append(elem)
+                    idx += len(elem)
+                    matched = True
+                    break
+            if not matched:
+                tokenized_text.append(split_text[idx])
+                idx += 1
+        encoded_text = [self.token2id.get(elem) for elem in tokenized_text]
+        return encoded_text
+
 text = 'Из кузова в кузов шла перегрузка арбузов. В грозу в грязи от груза арбузов развалился кузов.'
-BPE(30).fit(text)
-# print(sorted(set(text)))
+model = BPE(30)
+model.fit(text)
+model.encode(text)
