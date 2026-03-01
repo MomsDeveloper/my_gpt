@@ -24,12 +24,29 @@ class HeadAttention(nn.Module):
 
         return attention_matrix @ V
 
+class MultiHeadAttention(nn.Module):
+    def __init__(self, num_heads: int, emb_size: int, head_size: int, max_seq_len: int, dropout: float = 0.1):
+        super().__init__()
+        self.head_attentions = nn.ModuleList(
+            [HeadAttention(emb_size, head_size, max_seq_len) for _ in range(num_heads)]
+        )
+        self.out = nn.Linear(head_size * num_heads, emb_size)
+        self.dropout = nn.Dropout(dropout)
+    
+    def forward(self, x: torch.tensor):
+        head_outputs = [head(x) for head in self.head_attentions]
+        x = torch.cat(head_outputs, dim=-1)
+        x = self.out(x)
+        x = self.dropout(x)
+        return x
+
+num_heads = 10
 batch_size = 10
 seq_len = 20
 emb_size = 4
 head_size = 4
 max_seq_len = 25
 
-ha = HeadAttention(emb_size, head_size, max_seq_len)
+ha = MultiHeadAttention(num_heads, emb_size, head_size, max_seq_len)
 x = torch.rand((batch_size, seq_len, emb_size))
-ha(x)
+# ha(x)
