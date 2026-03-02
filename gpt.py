@@ -31,12 +31,16 @@ class GPT(nn.Module):
         x = self.linear(x)
         return x
 
-    def generate(self, x: torch.tensor, max_new_tokens: int):
+    def generate(self, x: torch.tensor, max_new_tokens: int, do_sample: bool):
         for _ in range(max_new_tokens):
             x_croppped = x[:, -self.max_seq_len:]
             logits = self.forward(x_croppped)
             last_vector = torch.softmax(logits[:, -1, :], dim=-1)
-            next_token = torch.argmax(last_vector, dim=-1, keepdim=True)
+            if not do_sample:
+                next_token = torch.argmax(last_vector, dim=-1, keepdim=True)
+            else:
+                next_token = torch.multinomial(last_vector, num_samples=1)
+            
             x = torch.cat([x, next_token], dim=1)
         return x
 
