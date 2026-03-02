@@ -31,11 +31,32 @@ class GPT(nn.Module):
         x = self.linear(x)
         return x
 
-    def generate(self, x: torch.tensor, max_new_tokens: int, do_sample: bool, temperature: float = 1.0):
+    def generate(self, x: torch.tensor, max_new_tokens: int, do_sample: bool, temperature: float = 1.0, top_k: int = None, top_p: float = None):
         for _ in range(max_new_tokens):
             x_croppped = x[:, -self.max_seq_len:]
-            logits = self.forward(x_croppped) / temperature
-            last_vector = torch.softmax(logits[:, -1, :], dim=-1)
+            logits = self.forward(x_croppped)
+            last_logit = logits[:, -1, :] / temperature
+            if top_k and do_sample:
+                top_values, top_indicies = torch.topk(last_logit, top_k, dim=-1)
+                filtered = torch.full_like(last_logit, float('-inf'))
+                filtered.scatter_(-1, top_indicies, top_values)
+                last_logit = filtered
+
+            if top_p and do_sample:
+                sorted_logits, sorted_indicies = last_logit.sort(-1, descending=True)
+                sorted_probs = torch.softmax(sorted_logits, dim=-1)
+
+                cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+                mask = cumulative_probs >= top_p
+                mask[:, 0] = False
+                
+                sorted_logits[mask] = float('-inf')
+
+                filtered = sorted_logits.scatter(-1, sorted_indicies, sorted_logits)
+                last_logit = filtered
+
+            last_vector = torch.softmax(last_logit, dim=-1)
+
             if not do_sample:
                 next_token = torch.argmax(last_vector, dim=-1, keepdim=True)
             else:
@@ -88,4 +109,4 @@ print("Input shape:", x.shape)        # (2, 10)
 output = model(x)
 print("Output shape:", output.shape)  # should be (2, 10, vocab_size)
 
-model.generate(x, 10, True)
+model.generate(x, 10, True, 1, None, 0.1)
