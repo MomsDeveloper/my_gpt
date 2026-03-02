@@ -31,10 +31,10 @@ class GPT(nn.Module):
         x = self.linear(x)
         return x
 
-    def generate(self, x: torch.tensor, max_new_tokens: int, do_sample: bool):
+    def generate(self, x: torch.tensor, max_new_tokens: int, do_sample: bool, temperature: float = 1.0):
         for _ in range(max_new_tokens):
             x_croppped = x[:, -self.max_seq_len:]
-            logits = self.forward(x_croppped)
+            logits = self.forward(x_croppped) / temperature
             last_vector = torch.softmax(logits[:, -1, :], dim=-1)
             if not do_sample:
                 next_token = torch.argmax(last_vector, dim=-1, keepdim=True)
@@ -88,4 +88,4 @@ print("Input shape:", x.shape)        # (2, 10)
 output = model(x)
 print("Output shape:", output.shape)  # should be (2, 10, vocab_size)
 
-model.generate(x, 10)
+model.generate(x, 10, True)
