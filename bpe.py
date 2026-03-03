@@ -76,10 +76,10 @@ class BPE():
         return obj
 
 
-text = 'Из кузова в кузов шла перегрузка арбузов. В грозу в грязи от груза арбузов развалился кузов.'
+# text = 'Из кузова в кузов шла перегрузка арбузов. В грозу в грязи от груза арбузов развалился кузов.'
 
-bpe = BPE(vocab_size=30)
-bpe.fit(text)
-bpe.save('./data/bpe.dill')
+# bpe = BPE(vocab_size=30)
+# bpe.fit(text)
+# bpe.save('./data/bpe.dill')
 
-bpe = BPE.load('data/bpe.dill')
+# bpe = BPE.load('data/bpe.dill')
