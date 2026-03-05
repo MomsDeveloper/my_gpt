@@ -1,2 +1,3 @@
 .venv
-./texts/
+texts
+.DS_Store

@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+from torch.utils import data
+from torch.optim import Adam
 from embedings import TokenEmbeddings, PositionalEmbeddings
 from decoder import Decoder
 
@@ -12,6 +14,8 @@ class GPT(nn.Module):
         self.num_heads = num_heads
         self.head_size = head_size
         self.num_layers = num_layers
+        self.dropout = dropout
+        self.device = device
 
         self.token_emb = TokenEmbeddings(vocab_size, emb_size)
         self.pos_emb = PositionalEmbeddings(max_seq_len, emb_size)
@@ -21,6 +25,53 @@ class GPT(nn.Module):
         )
         self.linear = nn.Linear(emb_size, vocab_size)
     
+    def fit(self, train_loader: data.DataLoader, valid_loader: data.DataLoader, num_epoch: int, learning_rate: float):
+        self.to(self.device)
+        optimizer = Adam(self.parameters(), lr=learning_rate)
+        loss_func = nn.CrossEntropyLoss()
+
+        for _ in range(num_epoch):
+            self.train()
+
+            loss_mean = 0 
+            lm_count = 0
+            for inputs, targets in train_loader:
+                inputs = inputs.to(self.device)
+                targets = targets.to(self.device)
+                # logits shape: (batch_size, seq_len, vocab_size)
+                # result shape: (batch_size * seq_len, vocab_size)
+                logits = self(inputs)
+                logits = logits.view(-1, logits.size(-1))
+                targets = targets.flatten()
+                self.loss = loss_func(logits, targets)
+
+                optimizer.zero_grad()
+                self.loss.backward()
+                optimizer.step() 
+
+                lm_count += 1
+                loss_mean = 1 / lm_count * self.loss.item() + (1 - 1 / lm_count) * loss_mean                   
+
+            self.eval()
+            
+            Q_val = 0
+            count_val = 0
+
+            for x_val, y_val in valid_loader:
+                with torch.no_grad():
+                    x_val = x_val.to(self.device)
+                    y_val = y_val.to(self.device)
+
+                    logits = self(x_val)
+                    logits = logits.view(-1, logits.size(-1))
+                    y_val = y_val.flatten()
+                    loss = loss_func(logits, y_val)
+                    Q_val += loss.item()
+                    count_val += 1
+
+            Q_val /= count_val
+
+
     def forward(self, x: torch.tensor):
         token_embeddings = self.token_emb(x)
         position_embeddings = self.pos_emb(x.size(1))
@@ -49,7 +100,7 @@ class GPT(nn.Module):
                 cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
                 mask = cumulative_probs >= top_p
                 mask[:, 0] = False
-                
+
                 sorted_logits[mask] = float('-inf')
 
                 filtered = sorted_logits.scatter(-1, sorted_indicies, sorted_logits)
