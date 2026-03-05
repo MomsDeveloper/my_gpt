@@ -16,6 +16,8 @@ class GPT(nn.Module):
         self.num_layers = num_layers
         self.dropout = dropout
         self.device = device
+        self.loss_lst = []
+        self.loss_lst_val = []
 
         self.token_emb = TokenEmbeddings(vocab_size, emb_size)
         self.pos_emb = PositionalEmbeddings(max_seq_len, emb_size)
@@ -43,14 +45,14 @@ class GPT(nn.Module):
                 logits = self(inputs)
                 logits = logits.view(-1, logits.size(-1))
                 targets = targets.flatten()
-                self.loss = loss_func(logits, targets)
+                loss = loss_func(logits, targets)
 
                 optimizer.zero_grad()
-                self.loss.backward()
+                loss.backward()
                 optimizer.step() 
 
                 lm_count += 1
-                loss_mean = 1 / lm_count * self.loss.item() + (1 - 1 / lm_count) * loss_mean                   
+                loss_mean = 1 / lm_count * loss.item() + (1 - 1 / lm_count) * loss_mean                   
 
             self.eval()
             
@@ -70,6 +72,9 @@ class GPT(nn.Module):
                     count_val += 1
 
             Q_val /= count_val
+
+            self.loss_lst.append(loss_mean)
+            self.loss_lst_val.append(Q_val)
 
 
     def forward(self, x: torch.tensor):
