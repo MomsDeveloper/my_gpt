@@ -6,6 +6,7 @@ from bpe import BPE
 from torch.utils.data import DataLoader
 from dataset import GetData
 from gpt import GPT
+import matplotlib.pyplot as plt
 
 vocab_size = 2000
 max_seq_len = 512
@@ -54,5 +55,15 @@ valid_loader = DataLoader(valid_dataset, batch_size=batch_size)
 model = GPT(vocab_size, max_seq_len, emb_size, num_heads, head_size, num_layers, dropout, device)
 
 model.fit(train_loader=train_loader, valid_loader=valid_loader, num_epoch=num_epoch, learning_rate=learning_rate)
-
+    
 model.save('./data/gpt.dill')
+
+# plot of the training and validation loss
+plt.plot(model.loss_lst, label='train loss')
+plt.plot(model.loss_lst_val, label='validation loss')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.title('Training and Validation Loss')
+plt.legend()
+plt.show()
+plt.savefig('./data/loss_plot.png')
