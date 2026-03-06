@@ -33,8 +33,8 @@ class GPT(nn.Module):
         optimizer = Adam(self.parameters(), lr=learning_rate)
         loss_func = nn.CrossEntropyLoss()
 
-        description = f'Train Loss: {self.loss_lst[-1]:.4f}, Val Loss: {self.loss_lst_val[-1]:.4f}' if self.loss_lst and self.loss_lst_val else 'Training...'
-        for _ in tqdm(range(num_epoch), desc=description, unit='epoch'):
+        pbar = tqdm(range(num_epoch), desc='Training...', unit='epoch')
+        for _ in pbar:
             self.train()
  
             loss_mean = 0 
@@ -78,6 +78,7 @@ class GPT(nn.Module):
             self.loss_lst.append(loss_mean)
             self.loss_lst_val.append(Q_val)
 
+            pbar.set_description(f'Training Loss: {loss_mean:.4f}, Val Loss: {Q_val:.4f}')
 
     def forward(self, x: torch.tensor):
         token_embeddings = self.token_emb(x)
