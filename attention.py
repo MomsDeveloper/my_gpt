@@ -9,7 +9,8 @@ class HeadAttention(nn.Module):
         self.wq = nn.Linear(emb_size, head_size)
         self.wv = nn.Linear(emb_size, head_size)
         
-        self.mask = torch.tril(torch.ones((max_seq_len, max_seq_len)))
+        # to move the mask to the same device as the input
+        self.register_buffer('mask', torch.tril(torch.ones((max_seq_len, max_seq_len))))
 
     def forward(self, x: torch.tensor):
         seq_len = x.size(1)
@@ -40,13 +41,13 @@ class MultiHeadAttention(nn.Module):
         x = self.dropout(x)
         return x
 
-num_heads = 10
-batch_size = 10
-seq_len = 20
-emb_size = 4
-head_size = 4
-max_seq_len = 25
+# num_heads = 10
+# batch_size = 10
+# seq_len = 20
+# emb_size = 4
+# head_size = 4
+# max_seq_len = 25
 
-ha = MultiHeadAttention(num_heads, emb_size, head_size, max_seq_len)
-x = torch.rand((batch_size, seq_len, emb_size))
+# ha = MultiHeadAttention(num_heads, emb_size, head_size, max_seq_len)
+# x = torch.rand((batch_size, seq_len, emb_size))
 # ha(x)

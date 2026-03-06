@@ -4,6 +4,7 @@ from torch.utils import data
 from torch.optim import Adam
 from embedings import TokenEmbeddings, PositionalEmbeddings
 from decoder import Decoder
+from tqdm.auto import tqdm
 
 class GPT(nn.Module):
     def __init__(self, vocab_size: int, max_seq_len: int, emb_size: int, num_heads: int,  head_size: int, num_layers: int, dropout: float = 0.1, device: str = 'cpu'):
@@ -32,12 +33,13 @@ class GPT(nn.Module):
         optimizer = Adam(self.parameters(), lr=learning_rate)
         loss_func = nn.CrossEntropyLoss()
 
-        for _ in range(num_epoch):
+        description = f'Train Loss: {self.loss_lst[-1]:.4f}, Val Loss: {self.loss_lst_val[-1]:.4f}' if self.loss_lst and self.loss_lst_val else 'Training...'
+        for _ in tqdm(range(num_epoch), desc=description, unit='epoch'):
             self.train()
 
             loss_mean = 0 
             lm_count = 0
-            for inputs, targets in train_loader:
+            for inputs, targets in tqdm(train_loader, desc='Training', unit='batch', leave=False):
                 inputs = inputs.to(self.device)
                 targets = targets.to(self.device)
                 # logits shape: (batch_size, seq_len, vocab_size)
@@ -148,21 +150,21 @@ class GPT(nn.Module):
         return model
 
 # Example parameters
-vocab_size = 100
-max_seq_len = 16
-emb_size = 32
-num_heads = 4
-head_size = 8
-num_layers = 2
-dropout = 0.1
+# vocab_size = 100
+# max_seq_len = 16
+# emb_size = 32
+# num_heads = 4
+# head_size = 8
+# num_layers = 2
+# dropout = 0.1
 
-model = GPT(vocab_size, max_seq_len, emb_size, num_heads, head_size, num_layers, dropout)
+# model = GPT(vocab_size, max_seq_len, emb_size, num_heads, head_size, num_layers, dropout)
 
-# Test input: batch_size=2, seq_len=10
-x = torch.randint(0, vocab_size, (2, 10))  # random token IDs
-print("Input shape:", x.shape)        # (2, 10)
+# # Test input: batch_size=2, seq_len=10
+# x = torch.randint(0, vocab_size, (2, 10))  # random token IDs
+# print("Input shape:", x.shape)        # (2, 10)
 
-output = model(x)
-print("Output shape:", output.shape)  # should be (2, 10, vocab_size)
+# output = model(x)
+# print("Output shape:", output.shape)  # should be (2, 10, vocab_size)
 
-model.generate(x, 10, True, 1, None, 0.1)
+# model.generate(x, 10, True, 1, None, 0.1)

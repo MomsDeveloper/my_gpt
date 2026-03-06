@@ -20,11 +20,11 @@ class PositionalEmbeddings(nn.Module):
         self.emb_matrix = nn.Embedding(self.max_seq_len, self.emb_size)
     
     def forward(self, seq_len: int):
-        positions = torch.arange(seq_len)
+        positions = torch.arange(seq_len, device=self.emb_matrix.weight.device)
         return self.emb_matrix(positions)
 
-te = TokenEmbeddings(700, 4)
-x = torch.tensor([[113, 456, 76, 345],
-        [345, 678, 454, 546]])
+# te = TokenEmbeddings(700, 4)
+# x = torch.tensor([[113, 456, 76, 345],
+#         [345, 678, 454, 546]])
 
-pe = PositionalEmbeddings(100, 4)
+# pe = PositionalEmbeddings(100, 4)
