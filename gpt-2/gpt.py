@@ -6,6 +6,7 @@ from embedings import TokenEmbeddings, PositionalEmbeddings
 from decoder import Decoder
 from tqdm import tqdm
 
+
 class GPT2(nn.Module):
     def __init__(self, vocab_size: int, max_seq_len: int, emb_size: int, num_heads: int,  head_size: int, num_layers: int, dropout: float = 0.1, device: str = 'cpu'):
         super().__init__()
@@ -24,7 +25,8 @@ class GPT2(nn.Module):
         self.pos_emb = PositionalEmbeddings(max_seq_len, emb_size)
         self.drop = nn.Dropout(dropout)
         self.decoders = nn.ModuleList(
-            [Decoder(num_heads, emb_size, head_size, max_seq_len, dropout) for _ in range(num_layers)]
+            [Decoder(num_heads, emb_size, head_size, max_seq_len, dropout)
+             for _ in range(num_layers)]
         )
         self.linear = nn.Linear(emb_size, vocab_size)
         self.norm = nn.LayerNorm(emb_size)
@@ -37,28 +39,28 @@ class GPT2(nn.Module):
         pbar = tqdm(range(num_epoch), desc='Training...', unit='epoch')
         for _ in pbar:
             self.train()
- 
-            loss_mean = 0 
+
+            loss_mean = 0
             lm_count = 0
             for inputs, targets in tqdm(train_loader, desc='Training', unit='batch', leave=False):
                 inputs = inputs.to(self.device)
                 targets = targets.to(self.device)
                 # logits shape: (batch_size, seq_len, vocab_size)
                 # result shape: (batch_size * seq_len, vocab_size)
-                logits = self(inputs)
+                logits, _ = self(inputs, False)
                 logits = logits.view(-1, logits.size(-1))
                 targets = targets.flatten()
                 loss = loss_func(logits, targets)
 
                 optimizer.zero_grad()
                 loss.backward()
-                optimizer.step() 
+                optimizer.step()
 
                 lm_count += 1
-                loss_mean = 1 / lm_count * loss.item() + (1 - 1 / lm_count) * loss_mean                   
+                loss_mean = 1 / lm_count * loss.item() + (1 - 1 / lm_count) * loss_mean
 
             self.eval()
-            
+
             Q_val = 0
             count_val = 0
 
@@ -67,7 +69,7 @@ class GPT2(nn.Module):
                     x_val = x_val.to(self.device)
                     y_val = y_val.to(self.device)
 
-                    logits = self(x_val)
+                    logits, _ = self(x_val, False)
                     logits = logits.view(-1, logits.size(-1))
                     y_val = y_val.flatten()
                     loss = loss_func(logits, y_val)
@@ -79,32 +81,63 @@ class GPT2(nn.Module):
             self.loss_lst.append(loss_mean)
             self.loss_lst_val.append(Q_val)
 
-            pbar.set_description(f'Training Loss: {loss_mean:.4f}, Val Loss: {Q_val:.4f}')
+            pbar.set_description(
+                f'Training Loss: {loss_mean:.4f}, Val Loss: {Q_val:.4f}')
 
-    def forward(self, x: torch.tensor):
+    def forward(self, x: torch.tensor, use_cache: bool = True, cache: list = None):
         token_embeddings = self.token_emb(x)
-        position_embeddings = self.pos_emb(x.size(1))
-        embedding = token_embeddings + position_embeddings
-        x = self.drop(embedding)
-        for decoder in self.decoders:
-            x = decoder(x)
+        if cache:
+            # [last_decoder][first_head][K_tensor]
+            start_pos = cache[-1][0][0].size(1)
+            position_embeddings = self.pos_emb(1, start_pos)
+            embedding = token_embeddings + position_embeddings
+
+            x = self.drop(embedding)
+
+            new_caches = []
+            for decoder in range(len(self.decoders)):
+                x, new_cache = self.decoders[decoder](
+                    x, use_cache, cache[decoder])
+                new_caches.append(new_cache)
+        else:
+            position_embeddings = self.pos_emb(x.size(1))
+            embedding = token_embeddings + position_embeddings
+
+            x = self.drop(embedding)
+            
+            new_caches = []
+            for decoder in self.decoders:
+                x, new_cache = decoder(x, use_cache, None)
+                new_caches.append(new_cache)
+                
         x = self.norm(x)
         x = self.linear(x)
-        return x
+        if use_cache:
+            return x, new_caches
+        else:
+            return x, None
 
-    def generate(self, x: torch.tensor, max_new_tokens: int, do_sample: bool, temperature: float = 1.0, top_k: int = None, top_p: float = None):
+    def generate(self, x: torch.tensor, max_new_tokens: int, do_sample: bool, temperature: float = 1.0, top_k: int = None, top_p: float = None, use_cache: bool = True):
+        cache = None
+        full_seq = x
         for _ in range(max_new_tokens):
-            x_croppped = x[:, -self.max_seq_len:]
-            logits = self.forward(x_croppped)
+            # x_croppped = x[:, -self.max_seq_len:]
+            if cache:
+                x = full_seq[:, -1:]
+            else: 
+                x = full_seq
+            logits, cache = self.forward(x, use_cache, cache)
             last_logit = logits[:, -1, :] / temperature
             if top_k and do_sample:
-                top_values, top_indicies = torch.topk(last_logit, top_k, dim=-1)
+                top_values, top_indicies = torch.topk(
+                    last_logit, top_k, dim=-1)
                 filtered = torch.full_like(last_logit, float('-inf'))
                 filtered.scatter_(-1, top_indicies, top_values)
                 last_logit = filtered
 
             if top_p and do_sample:
-                sorted_logits, sorted_indicies = last_logit.sort(-1, descending=True)
+                sorted_logits, sorted_indicies = last_logit.sort(
+                    -1, descending=True)
                 sorted_probs = torch.softmax(sorted_logits, dim=-1)
 
                 cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
@@ -113,7 +146,8 @@ class GPT2(nn.Module):
 
                 sorted_logits[mask] = float('-inf')
 
-                filtered = sorted_logits.scatter(-1, sorted_indicies, sorted_logits)
+                filtered = sorted_logits.scatter(-1,
+                                                 sorted_indicies, sorted_logits)
                 last_logit = filtered
 
             last_vector = torch.softmax(last_logit, dim=-1)
@@ -122,9 +156,9 @@ class GPT2(nn.Module):
                 next_token = torch.argmax(last_vector, dim=-1, keepdim=True)
             else:
                 next_token = torch.multinomial(last_vector, num_samples=1)
-            
-            x = torch.cat([x, next_token], dim=1)
-        return x
+
+            full_seq = torch.cat([full_seq, next_token], dim=1)
+        return full_seq
 
     def save(self, path):
         torch.save({
@@ -136,7 +170,7 @@ class GPT2(nn.Module):
             'head_size': self.head_size,
             'num_layers': self.num_layers
         }, path)
-    
+
     @classmethod
     def load(cls, path, device):
         checkpoint = torch.load(path, map_location=device)

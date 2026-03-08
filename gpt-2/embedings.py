@@ -19,8 +19,8 @@ class PositionalEmbeddings(nn.Module):
         self.emb_size = emb_size
         self.emb_matrix = nn.Embedding(self.max_seq_len, self.emb_size)
     
-    def forward(self, seq_len: int):
-        positions = torch.arange(seq_len, device=self.emb_matrix.weight.device)
+    def forward(self, seq_len: int, start_pos: int = 0):
+        positions = torch.arange(start_pos, start_pos + seq_len, device=self.emb_matrix.weight.device)
         return self.emb_matrix(positions)
 
 # te = TokenEmbeddings(700, 4)

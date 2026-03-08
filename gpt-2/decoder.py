@@ -11,14 +11,15 @@ class Decoder(nn.Module):
         self.norm1 = nn.LayerNorm(emb_size)
         self.norm2 = nn.LayerNorm(emb_size)
     
-    def forward(self, x: torch.tensor):
+    def forward(self, x: torch.tensor, use_cache: bool = True, cache: list = None):
         prev_x = x
         x = self.norm1(x)
-        x = self.mh_attention(x) + prev_x
+        x, cache_new = self.mh_attention(x, use_cache, cache)
+        x += prev_x
         prev_x = x
         x = self.norm2(x)
         x = self.ffn(x) + prev_x
-        return x
+        return x, cache_new
 
 
 
