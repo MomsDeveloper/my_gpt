@@ -21,15 +21,16 @@ class GPT2(nn.Module):
         self.loss_lst = []
         self.loss_lst_val = []
 
-        self.token_emb = TokenEmbeddings(vocab_size, emb_size)
-        self.pos_emb = PositionalEmbeddings(max_seq_len, emb_size)
+        self.wte = TokenEmbeddings(vocab_size, emb_size)
+        self.wpe = PositionalEmbeddings(max_seq_len, emb_size)
         self.drop = nn.Dropout(dropout)
-        self.decoders = nn.ModuleList(
+        self.h = nn.ModuleList(
             [Decoder(num_heads, emb_size, head_size, max_seq_len, dropout)
              for _ in range(num_layers)]
         )
-        self.linear = nn.Linear(emb_size, vocab_size)
-        self.norm = nn.LayerNorm(emb_size)
+        self.lm_head = nn.Linear(emb_size, vocab_size, bias=False)
+        self.lm_head.weight = self.wte.emb_matrix.weight
+        self.ln_f = nn.LayerNorm(emb_size)
 
     def fit(self, train_loader: data.DataLoader, valid_loader: data.DataLoader, num_epoch: int, learning_rate: float):
         self.to(self.device)
@@ -84,34 +85,34 @@ class GPT2(nn.Module):
             pbar.set_description(
                 f'Training Loss: {loss_mean:.4f}, Val Loss: {Q_val:.4f}')
 
-    def forward(self, x: torch.tensor, use_cache: bool = True, cache: list = None):
-        token_embeddings = self.token_emb(x)
-        if cache:
+    def forward(self, x: torch.tensor, use_cache: bool = False, cache: list[tuple] = None):
+        token_embeddings = self.wte(x)
+        if cache is not None:
             # [last_decoder][first_head][K_tensor]
-            start_pos = cache[-1][0][0].size(1)
-            position_embeddings = self.pos_emb(1, start_pos)
+            start_pos = cache[-1][0].size(2)
+            position_embeddings = self.wpe(1, start_pos)
             embedding = token_embeddings + position_embeddings
 
             x = self.drop(embedding)
 
             new_caches = []
-            for decoder in range(len(self.decoders)):
-                x, new_cache = self.decoders[decoder](
+            for decoder in range(len(self.h)):
+                x, new_cache = self.h[decoder](
                     x, use_cache, cache[decoder])
                 new_caches.append(new_cache)
         else:
-            position_embeddings = self.pos_emb(x.size(1))
+            position_embeddings = self.wpe(x.size(1))
             embedding = token_embeddings + position_embeddings
 
             x = self.drop(embedding)
             
             new_caches = []
-            for decoder in self.decoders:
+            for decoder in self.h:
                 x, new_cache = decoder(x, use_cache, None)
                 new_caches.append(new_cache)
                 
-        x = self.norm(x)
-        x = self.linear(x)
+        x = self.ln_f(x)
+        x = self.lm_head(x)
         if use_cache:
             return x, new_caches
         else:
@@ -122,7 +123,7 @@ class GPT2(nn.Module):
         full_seq = x
         for _ in range(max_new_tokens):
             # x_croppped = x[:, -self.max_seq_len:]
-            if cache:
+            if cache is not None:
                 x = full_seq[:, -1:]
             else: 
                 x = full_seq
@@ -137,11 +138,12 @@ class GPT2(nn.Module):
 
             if top_p and do_sample:
                 sorted_logits, sorted_indicies = last_logit.sort(
-                    -1, descending=True)
+                    dim=-1, descending=True)
                 sorted_probs = torch.softmax(sorted_logits, dim=-1)
 
                 cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
-                mask = cumulative_probs >= top_p
+                mask = cumulative_probs > top_p
+                mask[:, 1:] = mask[:, :-1].clone()
                 mask[:, 0] = False
 
                 sorted_logits[mask] = float('-inf')
@@ -168,7 +170,8 @@ class GPT2(nn.Module):
             'emb_size': self.emb_size,
             'num_heads': self.num_heads,
             'head_size': self.head_size,
-            'num_layers': self.num_layers
+            'num_layers': self.num_layers,
+            'dropout': self.dropout
         }, path)
 
     @classmethod
